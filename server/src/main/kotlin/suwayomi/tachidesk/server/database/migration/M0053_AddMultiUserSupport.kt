@@ -77,9 +77,10 @@ class M0053_AddMultiUserSupport : SQLMigration() {
         CREATE INDEX IF NOT EXISTS idx_category_user ON CategoryTable(user_id);
 
         -- Create default admin user (ID=1) for backwards compatibility
-        -- Password hash will be empty by default; can be set via API
+        -- Username and password will be synced with legacy credentials on first login
+        -- Using placeholder username that will be updated when legacy auth is used
         INSERT INTO UserTable (id, username, email, password_hash, role, is_active, created_at, updated_at)
-        SELECT 1, 'admin', NULL, '', 'ADMIN', TRUE,
+        SELECT 1, 'legacy-user', NULL, '', 'ADMIN', TRUE,
                CAST(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000 AS BIGINT),
                CAST(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000 AS BIGINT)
         WHERE NOT EXISTS (SELECT 1 FROM UserTable WHERE id = 1);

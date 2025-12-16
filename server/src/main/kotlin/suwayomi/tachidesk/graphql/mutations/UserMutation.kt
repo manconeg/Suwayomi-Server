@@ -49,8 +49,9 @@ class UserMutation {
                 input.password == serverConfig.authPassword.value
 
         if (isValid) {
-            // Default user (ID=1) for backwards compatibility with legacy auth
-            val jwt = Jwt.generateJwt(1)
+            // Ensure user ID=1 exists and matches current legacy credentials
+            val legacyUser = User.ensureLegacyUser(input.username, input.password)
+            val jwt = Jwt.generateJwt(legacyUser.id)
             return LoginPayload(
                 clientMutationId = input.clientMutationId,
                 accessToken = jwt.accessToken,
