@@ -5,6 +5,7 @@ import io.javalin.http.Header
 import io.javalin.websocket.WsConnectContext
 import suwayomi.tachidesk.global.impl.util.Jwt
 import suwayomi.tachidesk.graphql.types.AuthMode
+import suwayomi.tachidesk.manga.model.dataclass.UserRole
 import suwayomi.tachidesk.server.JavalinSetup.Attribute
 import suwayomi.tachidesk.server.JavalinSetup.getAttribute
 import suwayomi.tachidesk.server.serverConfig
@@ -14,19 +15,24 @@ sealed class UserType {
         val id: Int,
     ) : UserType()
 
+    class NormalUser(
+        val id: Int,
+    ) : UserType()
+
     data object Visitor : UserType()
 }
 
 fun UserType.requireUser(): Int =
     when (this) {
         is UserType.Admin -> id
+        is UserType.NormalUser -> id
         UserType.Visitor -> throw UnauthorizedException()
     }
 
 fun UserType.requireUserWithBasicFallback(ctx: Context): Int =
     when (this) {
-        is UserType.Admin -> {
-            id
+        is UserType.Admin, is UserType.NormalUser -> {
+            requireUser()
         }
 
         UserType.Visitor if ctx.getAttribute(Attribute.TachideskBasic) -> {
@@ -41,7 +47,8 @@ fun UserType.requireUserWithBasicFallback(ctx: Context): Int =
 
 fun getUserFromToken(token: String?): UserType {
     if (serverConfig.authMode.value != AuthMode.UI_LOGIN) {
-        return UserType.Admin(1)
+        // Legacy auth modes - look up default user from database
+        return getUserTypeForId(1)
     }
 
     if (token.isNullOrBlank()) {
@@ -60,11 +67,12 @@ fun getUserFromContext(ctx: Context): UserType {
     return when (serverConfig.authMode.value) {
         // NOTE: Basic Auth is expected to have been validated by JavalinSetup
         AuthMode.NONE, AuthMode.BASIC_AUTH -> {
-            UserType.Admin(1)
+            // Legacy auth - look up default user from database
+            getUserTypeForId(1)
         }
 
         AuthMode.SIMPLE_LOGIN -> {
-            if (cookieValid()) UserType.Admin(1) else UserType.Visitor
+            if (cookieValid()) getUserTypeForId(1) else UserType.Visitor
         }
 
         AuthMode.UI_LOGIN -> {
@@ -85,11 +93,12 @@ fun getUserFromWsContext(ctx: WsConnectContext): UserType {
     return when (serverConfig.authMode.value) {
         // NOTE: Basic Auth is expected to have been validated by JavalinSetup
         AuthMode.NONE, AuthMode.BASIC_AUTH -> {
-            UserType.Admin(1)
+            // Legacy auth - look up default user from database
+            getUserTypeForId(1)
         }
 
         AuthMode.SIMPLE_LOGIN -> {
-            if (cookieValid()) UserType.Admin(1) else UserType.Visitor
+            if (cookieValid()) getUserTypeForId(1) else UserType.Visitor
         }
 
         AuthMode.UI_LOGIN -> {
@@ -99,6 +108,19 @@ fun getUserFromWsContext(ctx: WsConnectContext): UserType {
 
             getUserFromToken(token)
         }
+    }
+}
+
+/**
+ * Helper function to get the appropriate UserType for a user ID by looking up their role in the database
+ */
+private fun getUserTypeForId(userId: Int): UserType {
+    val user = User.getUserById(userId) ?: return UserType.Visitor
+    if (!user.isActive) return UserType.Visitor
+
+    return when (user.role) {
+        UserRole.ADMIN -> UserType.Admin(userId)
+        UserRole.USER -> UserType.NormalUser(userId)
     }
 }
 

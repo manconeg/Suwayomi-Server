@@ -7,7 +7,9 @@ import com.auth0.jwt.JWTVerifier
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.exceptions.JWTVerificationException
 import io.github.oshai.kotlinlogging.KotlinLogging
+import suwayomi.tachidesk.manga.model.dataclass.UserRole
 import suwayomi.tachidesk.server.serverConfig
+import suwayomi.tachidesk.server.user.User
 import suwayomi.tachidesk.server.user.UserType
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -64,7 +66,7 @@ object Jwt {
         val refreshToken: String,
     )
 
-    fun generateJwt(userId: Int = 1): JwtTokens {
+    fun generateJwt(userId: Int): JwtTokens {
         val accessToken = createAccessToken(userId)
         val refreshToken = createRefreshToken(userId)
 
@@ -84,7 +86,8 @@ object Jwt {
         }
 
         // Extract user ID from refresh token
-        val userId = jwt.getClaim("user_id").asInt() ?: 1
+        val userId = jwt.getClaim("user_id").asInt()
+        require(userId != null) { "Token missing user_id claim" }
 
         return createAccessToken(userId)
     }
@@ -100,10 +103,22 @@ object Jwt {
                 "Token intended for different audience ${decodedJWT.audience}"
             }
 
-            // Extract user ID from token, default to 1 for backwards compatibility
-            val userId = decodedJWT.getClaim("user_id").asInt() ?: 1
+            // Extract user ID from token
+            val userId = decodedJWT.getClaim("user_id").asInt()
+            require(userId != null) { "Token missing user_id claim" }
 
-            return UserType.Admin(userId)
+            // Look up user from database to get current role
+            val user = User.getUserById(userId)
+            if (user == null || !user.isActive) {
+                logger.warn { "Token contains invalid or inactive user ID: $userId" }
+                return UserType.Visitor
+            }
+
+            // Return appropriate UserType based on current role in database
+            return when (user.role) {
+                UserRole.ADMIN -> UserType.Admin(userId)
+                UserRole.USER -> UserType.NormalUser(userId)
+            }
         } catch (e: JWTVerificationException) {
             logger.warn(e) { "Received invalid token" }
             return UserType.Visitor
