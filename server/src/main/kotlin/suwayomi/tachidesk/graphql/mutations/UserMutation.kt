@@ -34,8 +34,8 @@ class UserMutation {
         // Try multi-user authentication first
         val authenticatedUser = User.authenticateUser(input.username, input.password)
         if (authenticatedUser != null) {
-            // Generate JWT with user ID and role
-            val jwt = Jwt.generateJwt(authenticatedUser.id, authenticatedUser.role.name)
+            // Generate JWT with user ID (role will be checked from database)
+            val jwt = Jwt.generateJwt(authenticatedUser.id)
             return LoginPayload(
                 clientMutationId = input.clientMutationId,
                 accessToken = jwt.accessToken,
@@ -45,14 +45,12 @@ class UserMutation {
 
         // Fall back to legacy single-user authentication for backwards compatibility
         val isValid =
-            serverConfig.authMode.value != AuthMode.UI_LOGIN ||
-                (
-                    input.username == serverConfig.authUsername.value &&
-                        input.password == serverConfig.authPassword.value
-                )
+            input.username == serverConfig.authUsername.value &&
+                input.password == serverConfig.authPassword.value
 
         if (isValid) {
-            val jwt = Jwt.generateJwt(1, "ADMIN") // Default user for backwards compatibility
+            // Default user (ID=1) for backwards compatibility with legacy auth
+            val jwt = Jwt.generateJwt(1)
             return LoginPayload(
                 clientMutationId = input.clientMutationId,
                 accessToken = jwt.accessToken,

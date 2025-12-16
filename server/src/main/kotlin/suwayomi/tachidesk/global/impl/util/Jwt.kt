@@ -64,12 +64,9 @@ object Jwt {
         val refreshToken: String,
     )
 
-    fun generateJwt(
-        userId: Int = 1,
-        role: String = "ADMIN",
-    ): JwtTokens {
-        val accessToken = createAccessToken(userId, role)
-        val refreshToken = createRefreshToken(userId, role)
+    fun generateJwt(userId: Int = 1): JwtTokens {
+        val accessToken = createAccessToken(userId)
+        val refreshToken = createRefreshToken(userId)
 
         return JwtTokens(
             accessToken = accessToken,
@@ -86,11 +83,10 @@ object Jwt {
             "Token intended for different audience ${jwt.audience}"
         }
 
-        // Extract user ID and role from refresh token
+        // Extract user ID from refresh token
         val userId = jwt.getClaim("user_id").asInt() ?: 1
-        val role = jwt.getClaim("role").asString() ?: "ADMIN"
 
-        return createAccessToken(userId, role)
+        return createAccessToken(userId)
     }
 
     fun verifyJwt(jwt: String): UserType {
@@ -114,10 +110,7 @@ object Jwt {
         }
     }
 
-    private fun createAccessToken(
-        userId: Int,
-        role: String,
-    ): String {
+    private fun createAccessToken(userId: Int): String {
         val jwt =
             JWT
                 .create()
@@ -125,23 +118,18 @@ object Jwt {
                 .withAudience(AUDIENCE)
                 .withClaim("token_type", "access")
                 .withClaim("user_id", userId)
-                .withClaim("role", role)
                 .withExpiresAt(Instant.now().plusSeconds(accessTokenExpiry.inWholeSeconds))
 
         return jwt.sign(algorithm)
     }
 
-    private fun createRefreshToken(
-        userId: Int,
-        role: String,
-    ): String =
+    private fun createRefreshToken(userId: Int): String =
         JWT
             .create()
             .withIssuer(ISSUER)
             .withAudience(AUDIENCE)
             .withClaim("token_type", "refresh")
             .withClaim("user_id", userId)
-            .withClaim("role", role)
             .withExpiresAt(Instant.now().plusSeconds(refreshTokenExpiry.inWholeSeconds))
             .sign(algorithm)
 }

@@ -266,9 +266,15 @@ These remain global and shared across all users:
 
 ## Security Considerations
 
-1. **Password Hashing**: Use BCrypt with appropriate cost factor
-2. **JWT Tokens**: Use existing JWT implementation with user ID in claims
-3. **Authorization**: Check user ownership for all data access
+1. **Password Hashing**: Use BCrypt with appropriate cost factor (12)
+2. **JWT Tokens**:
+   - Tokens contain only `user_id`, `token_type`, issuer, audience, and expiration
+   - **Roles are NOT stored in tokens** - always fetched from database for authorization
+   - This ensures role changes take effect immediately (no stale permissions)
+   - Single source of truth: database determines what a user can do
+3. **Authorization**:
+   - Check user ownership for all data access
+   - Always query database for current role (never trust cached values)
 4. **Admin Access**: Only ADMIN role can access user management APIs
 5. **Rate Limiting**: Consider adding rate limiting for auth endpoints
 6. **SQL Injection**: Use parameterized queries (already done by Exposed)
