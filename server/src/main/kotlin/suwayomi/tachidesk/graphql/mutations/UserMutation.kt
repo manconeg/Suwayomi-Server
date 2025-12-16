@@ -4,8 +4,10 @@ import graphql.schema.DataFetchingEnvironment
 import suwayomi.tachidesk.global.impl.util.Jwt
 import suwayomi.tachidesk.graphql.directives.RequireAuth
 import suwayomi.tachidesk.graphql.server.getAttribute
+import suwayomi.tachidesk.graphql.types.AuthMode
 import suwayomi.tachidesk.server.JavalinSetup.Attribute
 import suwayomi.tachidesk.server.serverConfig
+import suwayomi.tachidesk.server.user.User
 import suwayomi.tachidesk.server.user.UserType
 
 class UserMutation {
@@ -28,11 +30,29 @@ class UserMutation {
         if (dataFetchingEnvironment.getAttribute(Attribute.TachideskUser) !is UserType.Visitor) {
             throw IllegalArgumentException("Cannot login while already logged-in")
         }
+
+        // Try multi-user authentication first
+        val authenticatedUser = User.authenticateUser(input.username, input.password)
+        if (authenticatedUser != null) {
+            // Generate JWT with user ID and role
+            val jwt = Jwt.generateJwt(authenticatedUser.id, authenticatedUser.role.name)
+            return LoginPayload(
+                clientMutationId = input.clientMutationId,
+                accessToken = jwt.accessToken,
+                refreshToken = jwt.refreshToken,
+            )
+        }
+
+        // Fall back to legacy single-user authentication for backwards compatibility
         val isValid =
-            input.username == serverConfig.authUsername.value &&
-                input.password == serverConfig.authPassword.value
+            serverConfig.authMode.value != AuthMode.UI_LOGIN ||
+                (
+                    input.username == serverConfig.authUsername.value &&
+                        input.password == serverConfig.authPassword.value
+                )
+
         if (isValid) {
-            val jwt = Jwt.generateJwt()
+            val jwt = Jwt.generateJwt(1, "ADMIN") // Default user for backwards compatibility
             return LoginPayload(
                 clientMutationId = input.clientMutationId,
                 accessToken = jwt.accessToken,

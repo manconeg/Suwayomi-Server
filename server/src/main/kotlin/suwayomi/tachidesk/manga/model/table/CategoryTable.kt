@@ -8,17 +8,23 @@ package suwayomi.tachidesk.manga.model.table
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import org.jetbrains.exposed.dao.id.IntIdTable
+import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.ResultRow
 import suwayomi.tachidesk.manga.impl.Category
 import suwayomi.tachidesk.manga.model.dataclass.CategoryDataClass
 import suwayomi.tachidesk.manga.model.dataclass.IncludeOrExclude
 
 object CategoryTable : IntIdTable() {
+    val user = reference("user_id", UserTable, ReferenceOption.CASCADE).nullable()
     val name = varchar("name", 64)
     val order = integer("sort_order").default(0)
     val isDefault = bool("is_default").default(false)
     val includeInUpdate = integer("include_in_update").default(IncludeOrExclude.UNSET.value)
     val includeInDownload = integer("include_in_download").default(IncludeOrExclude.UNSET.value)
+
+    init {
+        index(false, user)
+    }
 }
 
 fun CategoryTable.toDataClass(categoryEntry: ResultRow) =

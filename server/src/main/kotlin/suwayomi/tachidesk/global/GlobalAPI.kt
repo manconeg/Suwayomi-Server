@@ -7,13 +7,17 @@ package suwayomi.tachidesk.global
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+import io.javalin.apibuilder.ApiBuilder.delete
 import io.javalin.apibuilder.ApiBuilder.get
 import io.javalin.apibuilder.ApiBuilder.patch
 import io.javalin.apibuilder.ApiBuilder.path
+import io.javalin.apibuilder.ApiBuilder.post
+import io.javalin.apibuilder.ApiBuilder.put
 import io.javalin.apibuilder.ApiBuilder.ws
 import suwayomi.tachidesk.global.controller.GlobalMetaController
 import suwayomi.tachidesk.global.controller.SettingsController
 import suwayomi.tachidesk.global.controller.WebViewController
+import suwayomi.tachidesk.server.controller.UserController
 
 object GlobalAPI {
     fun defineEndpoints() {
@@ -28,6 +32,19 @@ object GlobalAPI {
         path("webview") {
             get("", WebViewController.webview)
             ws("", WebViewController::webviewWS)
+        }
+        path("user") {
+            get("me", UserController.getCurrentUser)
+            path("{userId}") {
+                get("", UserController.getUserById)
+                put("", UserController.updateUser)
+                delete("", UserController.deleteUser)
+                post("password", UserController.changePassword)
+            }
+        }
+        path("users") {
+            get("", UserController.getAllUsers)
+            post("", UserController.createUser)
         }
     }
 }
