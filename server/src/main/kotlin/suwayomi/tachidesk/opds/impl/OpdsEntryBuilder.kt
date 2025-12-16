@@ -551,6 +551,32 @@ object OpdsEntryBuilder {
      * Adds a comprehensive set of facet links for library feeds, covering sorting, content filtering,
      * and cross-filtering by source, category, status, language, and genre.
      */
+    /**
+     * Configuration for a simple facet option (sort or filter).
+     */
+    private data class FacetOption(
+        val value: String,
+        val titleResource: StringResource,
+    )
+
+    /**
+     * Configuration for a cross-filter facet group.
+     */
+    private data class CrossFilterConfig<T>(
+        val filterKey: String,
+        val filterType: PrimaryFilterType,
+        val groupTitleResource: StringResource,
+        val allItemsTitleResource: StringResource,
+        val dataProvider: () -> List<T>,
+        val getId: (T) -> String,
+        val getTitle: (T) -> String,
+        val getMangaCount: (T) -> Long?,
+        val isActive: (T) -> Boolean,
+    )
+
+    /**
+     * Adds all library facets (sort, filter, and cross-filter) to the feed.
+     */
     fun addLibraryFacets(
         feedBuilder: FeedBuilderInternal,
         baseUrl: String,
@@ -559,10 +585,6 @@ object OpdsEntryBuilder {
     ) {
         val currentSort = activeFilters.sort ?: "alpha_asc"
         val currentFilter = activeFilters.filter ?: "all"
-
-        val sortGroup = MR.strings.opds_facetgroup_sort_order.localized(locale)
-        val filterGroup = MR.strings.opds_facetgroup_filter_content.localized(locale)
-        val filterCounts = MangaRepository.getLibraryFilterCounts()
 
         val buildUrl = { newFilters: OpdsMangaFilter, newSort: String, newFilter: String ->
             val crossFilterParams = newFilters.toCrossFilterQueryParameters()
@@ -573,201 +595,196 @@ object OpdsEntryBuilder {
             "$baseUrl/library/series?${allParams.joinToString("&")}"
         }
 
-        // --- Sort Facets ---
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, "alpha_asc", currentFilter),
-            MR.strings.opds_facet_sort_alpha_asc.localized(locale),
-            sortGroup,
-            currentSort == "alpha_asc",
-            null,
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, "alpha_desc", currentFilter),
-            MR.strings.opds_facet_sort_alpha_desc.localized(locale),
-            sortGroup,
-            currentSort == "alpha_desc",
-            null,
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, "last_read_desc", currentFilter),
-            MR.strings.opds_facet_sort_last_read_desc.localized(locale),
-            sortGroup,
-            currentSort == "last_read_desc",
-            null,
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, "latest_chapter_desc", currentFilter),
-            MR.strings.opds_facet_sort_latest_chapter_desc.localized(locale),
-            sortGroup,
-            currentSort == "latest_chapter_desc",
-            null,
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, "date_added_desc", currentFilter),
-            MR.strings.opds_facet_sort_date_added_desc.localized(locale),
-            sortGroup,
-            currentSort == "date_added_desc",
-            null,
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, "unread_desc", currentFilter),
-            MR.strings.opds_facet_sort_unread_desc.localized(locale),
-            sortGroup,
-            currentSort == "unread_desc",
-            null,
+        addSortFacets(feedBuilder, activeFilters, currentSort, currentFilter, locale, buildUrl)
+        addFilterFacets(feedBuilder, activeFilters, currentSort, currentFilter, locale, buildUrl)
+        addCrossFilterFacets(feedBuilder, activeFilters, currentSort, currentFilter, locale, buildUrl)
+    }
+
+    /**
+     * Adds sort facets to the feed.
+     */
+    private fun addSortFacets(
+        feedBuilder: FeedBuilderInternal,
+        activeFilters: OpdsMangaFilter,
+        currentSort: String,
+        currentFilter: String,
+        locale: Locale,
+        buildUrl: (OpdsMangaFilter, String, String) -> String,
+    ) {
+        val sortGroup = MR.strings.opds_facetgroup_sort_order.localized(locale)
+        val sortOptions = listOf(
+            FacetOption("alpha_asc", MR.strings.opds_facet_sort_alpha_asc),
+            FacetOption("alpha_desc", MR.strings.opds_facet_sort_alpha_desc),
+            FacetOption("last_read_desc", MR.strings.opds_facet_sort_last_read_desc),
+            FacetOption("latest_chapter_desc", MR.strings.opds_facet_sort_latest_chapter_desc),
+            FacetOption("date_added_desc", MR.strings.opds_facet_sort_date_added_desc),
+            FacetOption("unread_desc", MR.strings.opds_facet_sort_unread_desc),
         )
 
-        // --- Filter Facets ---
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, currentSort, "all"),
-            MR.strings.opds_facet_filter_all.localized(locale),
-            filterGroup,
-            currentFilter == "all",
-            null,
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, currentSort, "unread"),
-            MR.strings.opds_facet_filter_unread_only.localized(locale),
-            filterGroup,
-            currentFilter == "unread",
-            filterCounts["unread"],
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, currentSort, "downloaded"),
-            MR.strings.opds_facet_filter_downloaded.localized(locale),
-            filterGroup,
-            currentFilter == "downloaded",
-            filterCounts["downloaded"],
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, currentSort, "ongoing"),
-            MR.strings.opds_facet_filter_ongoing.localized(locale),
-            filterGroup,
-            currentFilter == "ongoing",
-            filterCounts["ongoing"],
-        )
-        addFacet(
-            feedBuilder,
-            buildUrl(activeFilters, currentSort, "completed"),
-            MR.strings.opds_facet_filter_completed.localized(locale),
-            filterGroup,
-            currentFilter == "completed",
-            filterCounts["completed"],
+        sortOptions.forEach { option ->
+            addFacet(
+                feedBuilder,
+                buildUrl(activeFilters, option.value, currentFilter),
+                option.titleResource.localized(locale),
+                sortGroup,
+                currentSort == option.value,
+                null,
+            )
+        }
+    }
+
+    /**
+     * Adds filter facets to the feed.
+     */
+    private fun addFilterFacets(
+        feedBuilder: FeedBuilderInternal,
+        activeFilters: OpdsMangaFilter,
+        currentSort: String,
+        currentFilter: String,
+        locale: Locale,
+        buildUrl: (OpdsMangaFilter, String, String) -> String,
+    ) {
+        val filterGroup = MR.strings.opds_facetgroup_filter_content.localized(locale)
+        val filterCounts = MangaRepository.getLibraryFilterCounts()
+        val filterOptions = listOf(
+            FacetOption("all", MR.strings.opds_facet_filter_all) to null,
+            FacetOption("unread", MR.strings.opds_facet_filter_unread_only) to filterCounts["unread"],
+            FacetOption("downloaded", MR.strings.opds_facet_filter_downloaded) to filterCounts["downloaded"],
+            FacetOption("ongoing", MR.strings.opds_facet_filter_ongoing) to filterCounts["ongoing"],
+            FacetOption("completed", MR.strings.opds_facet_filter_completed) to filterCounts["completed"],
         )
 
-        // --- Cross-Filter Facets ---
-        if (activeFilters.primaryFilter != PrimaryFilterType.SOURCE) {
-            val sources = NavigationRepository.getLibrarySources(1).first
+        filterOptions.forEach { (option, count) ->
             addFacet(
                 feedBuilder,
-                buildUrl(activeFilters.without("source_id"), currentSort, currentFilter),
-                MR.strings.opds_facet_all_sources.localized(locale),
-                MR.strings.opds_facetgroup_filter_source.localized(locale),
-                activeFilters.sourceId == null,
-                null,
+                buildUrl(activeFilters, currentSort, option.value),
+                option.titleResource.localized(locale),
+                filterGroup,
+                currentFilter == option.value,
+                count,
             )
-            sources.forEach {
-                addFacet(
-                    feedBuilder,
-                    buildUrl(activeFilters.with("source_id", it.id.toString()), currentSort, currentFilter),
-                    it.name,
-                    MR.strings.opds_facetgroup_filter_source.localized(locale),
-                    activeFilters.sourceId == it.id,
-                    it.mangaCount,
-                )
-            }
         }
-        if (activeFilters.primaryFilter != PrimaryFilterType.CATEGORY) {
-            val categories = NavigationRepository.getCategories(1).first
-            addFacet(
-                feedBuilder,
-                buildUrl(activeFilters.without("category_id"), currentSort, currentFilter),
-                MR.strings.opds_facet_all_categories.localized(locale),
-                MR.strings.opds_facetgroup_filter_category.localized(locale),
-                activeFilters.categoryId == null,
-                null,
+    }
+
+    /**
+     * Adds cross-filter facets (source, category, status, language, genre) to the feed.
+     */
+    private fun addCrossFilterFacets(
+        feedBuilder: FeedBuilderInternal,
+        activeFilters: OpdsMangaFilter,
+        currentSort: String,
+        currentFilter: String,
+        locale: Locale,
+        buildUrl: (OpdsMangaFilter, String, String) -> String,
+    ) {
+        val crossFilters = buildList {
+            add(
+                CrossFilterConfig(
+                    filterKey = "source_id",
+                    filterType = PrimaryFilterType.SOURCE,
+                    groupTitleResource = MR.strings.opds_facetgroup_filter_source,
+                    allItemsTitleResource = MR.strings.opds_facet_all_sources,
+                    dataProvider = { NavigationRepository.getLibrarySources(1).first },
+                    getId = { it.id.toString() },
+                    getTitle = { it.name },
+                    getMangaCount = { it.mangaCount },
+                    isActive = { it.id == activeFilters.sourceId },
+                ),
             )
-            categories.forEach {
-                addFacet(
-                    feedBuilder,
-                    buildUrl(activeFilters.with("category_id", it.id.toString()), currentSort, currentFilter),
-                    it.name,
-                    MR.strings.opds_facetgroup_filter_category.localized(locale),
-                    activeFilters.categoryId == it.id,
-                    it.mangaCount,
-                )
-            }
+            add(
+                CrossFilterConfig(
+                    filterKey = "category_id",
+                    filterType = PrimaryFilterType.CATEGORY,
+                    groupTitleResource = MR.strings.opds_facetgroup_filter_category,
+                    allItemsTitleResource = MR.strings.opds_facet_all_categories,
+                    dataProvider = { NavigationRepository.getCategories(1).first },
+                    getId = { it.id.toString() },
+                    getTitle = { it.name },
+                    getMangaCount = { it.mangaCount },
+                    isActive = { it.id == activeFilters.categoryId },
+                ),
+            )
+            add(
+                CrossFilterConfig(
+                    filterKey = "status_id",
+                    filterType = PrimaryFilterType.STATUS,
+                    groupTitleResource = MR.strings.opds_facetgroup_filter_status,
+                    allItemsTitleResource = MR.strings.opds_facet_all_statuses,
+                    dataProvider = { NavigationRepository.getStatuses(locale) },
+                    getId = { it.id.toString() },
+                    getTitle = { it.title },
+                    getMangaCount = { it.mangaCount },
+                    isActive = { it.id == activeFilters.statusId },
+                ),
+            )
+            add(
+                CrossFilterConfig(
+                    filterKey = "lang_code",
+                    filterType = PrimaryFilterType.LANGUAGE,
+                    groupTitleResource = MR.strings.opds_facetgroup_filter_language,
+                    allItemsTitleResource = MR.strings.opds_facet_all_languages,
+                    dataProvider = { NavigationRepository.getContentLanguages(locale) },
+                    getId = { it.id },
+                    getTitle = { it.title },
+                    getMangaCount = { it.mangaCount },
+                    isActive = { it.id == activeFilters.langCode },
+                ),
+            )
+            add(
+                CrossFilterConfig(
+                    filterKey = "genre",
+                    filterType = PrimaryFilterType.GENRE,
+                    groupTitleResource = MR.strings.opds_facetgroup_filter_genre,
+                    allItemsTitleResource = MR.strings.opds_facet_all_genres,
+                    dataProvider = { NavigationRepository.getGenres(1, locale).first },
+                    getId = { it.id },
+                    getTitle = { it.title },
+                    getMangaCount = { it.mangaCount },
+                    isActive = { it.id == activeFilters.genre },
+                ),
+            )
         }
-        if (activeFilters.primaryFilter != PrimaryFilterType.STATUS) {
-            val statuses = NavigationRepository.getStatuses(locale)
-            addFacet(
-                feedBuilder,
-                buildUrl(activeFilters.without("status_id"), currentSort, currentFilter),
-                MR.strings.opds_facet_all_statuses.localized(locale),
-                MR.strings.opds_facetgroup_filter_status.localized(locale),
-                activeFilters.statusId == null,
-                null,
-            )
-            statuses.forEach {
-                addFacet(
-                    feedBuilder,
-                    buildUrl(activeFilters.with("status_id", it.id.toString()), currentSort, currentFilter),
-                    it.title,
-                    MR.strings.opds_facetgroup_filter_status.localized(locale),
-                    activeFilters.statusId == it.id,
-                    it.mangaCount,
-                )
-            }
+
+        crossFilters.forEach { config ->
+            addCrossFilterFacetGroup(feedBuilder, activeFilters, currentSort, currentFilter, locale, buildUrl, config)
         }
-        if (activeFilters.primaryFilter != PrimaryFilterType.LANGUAGE) {
-            val languages = NavigationRepository.getContentLanguages(locale)
+    }
+
+    /**
+     * Adds a cross-filter facet group to the feed.
+     */
+    private fun <T> addCrossFilterFacetGroup(
+        feedBuilder: FeedBuilderInternal,
+        activeFilters: OpdsMangaFilter,
+        currentSort: String,
+        currentFilter: String,
+        locale: Locale,
+        buildUrl: (OpdsMangaFilter, String, String) -> String,
+        config: CrossFilterConfig<T>,
+    ) {
+        if (activeFilters.primaryFilter != config.filterType) {
+            val items = config.dataProvider()
+            val groupTitle = config.groupTitleResource.localized(locale)
+
+            // Add "All" facet
             addFacet(
                 feedBuilder,
-                buildUrl(activeFilters.without("lang_code"), currentSort, currentFilter),
-                MR.strings.opds_facet_all_languages.localized(locale),
-                MR.strings.opds_facetgroup_filter_language.localized(locale),
-                activeFilters.langCode == null,
+                buildUrl(activeFilters.without(config.filterKey), currentSort, currentFilter),
+                config.allItemsTitleResource.localized(locale),
+                groupTitle,
+                activeFilters.without(config.filterKey) == activeFilters,
                 null,
             )
-            languages.forEach {
+
+            // Add individual item facets
+            items.forEach { item ->
                 addFacet(
                     feedBuilder,
-                    buildUrl(activeFilters.with("lang_code", it.id), currentSort, currentFilter),
-                    it.title,
-                    MR.strings.opds_facetgroup_filter_language.localized(locale),
-                    activeFilters.langCode == it.id,
-                    it.mangaCount,
-                )
-            }
-        }
-        if (activeFilters.primaryFilter != PrimaryFilterType.GENRE) {
-            val genres = NavigationRepository.getGenres(1, locale).first
-            addFacet(
-                feedBuilder,
-                buildUrl(activeFilters.without("genre"), currentSort, currentFilter),
-                MR.strings.opds_facet_all_genres.localized(locale),
-                MR.strings.opds_facetgroup_filter_genre.localized(locale),
-                activeFilters.genre == null,
-                null,
-            )
-            genres.forEach {
-                addFacet(
-                    feedBuilder,
-                    buildUrl(activeFilters.with("genre", it.id), currentSort, currentFilter),
-                    it.title,
-                    MR.strings.opds_facetgroup_filter_genre.localized(locale),
-                    activeFilters.genre == it.id,
-                    it.mangaCount,
+                    buildUrl(activeFilters.with(config.filterKey, config.getId(item)), currentSort, currentFilter),
+                    config.getTitle(item),
+                    groupTitle,
+                    config.isActive(item),
+                    config.getMangaCount(item),
                 )
             }
         }
