@@ -15,7 +15,7 @@ sealed class UserType {
         val id: Int,
     ) : UserType()
 
-    class NormalUser(
+    class Standard(
         val id: Int,
     ) : UserType()
 
@@ -25,13 +25,13 @@ sealed class UserType {
 fun UserType.requireUser(): Int =
     when (this) {
         is UserType.Admin -> id
-        is UserType.NormalUser -> id
+        is UserType.Standard -> id
         UserType.Visitor -> throw UnauthorizedException()
     }
 
 fun UserType.requireUserWithBasicFallback(ctx: Context): Int =
     when (this) {
-        is UserType.Admin, is UserType.NormalUser -> {
+        is UserType.Admin, is UserType.Standard -> {
             requireUser()
         }
 
@@ -120,7 +120,7 @@ private fun getUserTypeForId(userId: Int): UserType {
 
     return when (user.role) {
         UserRole.ADMIN -> UserType.Admin(userId)
-        UserRole.USER -> UserType.NormalUser(userId)
+        UserRole.USER -> UserType.Standard(userId)
     }
 }
 

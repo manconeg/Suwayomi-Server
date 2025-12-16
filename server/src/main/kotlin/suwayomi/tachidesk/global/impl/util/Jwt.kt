@@ -117,7 +117,7 @@ object Jwt {
             // Return appropriate UserType based on current role in database
             return when (user.role) {
                 UserRole.ADMIN -> UserType.Admin(userId)
-                UserRole.USER -> UserType.NormalUser(userId)
+                UserRole.USER -> UserType.Standard(userId)
             }
         } catch (e: JWTVerificationException) {
             logger.warn(e) { "Received invalid token" }
