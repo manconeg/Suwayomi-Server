@@ -312,44 +312,4 @@ object User {
      * Check if a user is an admin
      */
     fun isAdmin(userId: Int): Boolean = hasRole(userId, UserRole.ADMIN)
-
-    /**
-     * Ensure legacy user (ID=1) exists and matches current legacy credentials
-     * Used for backwards compatibility with legacy auth modes
-     */
-    fun ensureLegacyUser(
-        username: String,
-        password: String,
-    ): UserDataClass =
-        transaction {
-            val existingUser = getUserById(1)
-            val now = System.currentTimeMillis()
-
-            if (existingUser == null) {
-                // Create user ID=1 with legacy credentials
-                val passwordHash = hashPassword(password)
-                UserTable.insert {
-                    it[UserTable.id] = 1
-                    it[UserTable.username] = username
-                    it[UserTable.email] = null
-                    it[UserTable.passwordHash] = passwordHash
-                    it[UserTable.role] = UserRole.ADMIN.name
-                    it[UserTable.isActive] = true
-                    it[UserTable.createdAt] = now
-                    it[UserTable.updatedAt] = now
-                }
-                logger.info { "Created legacy user (ID=1) with username: $username" }
-            } else {
-                // Update existing user ID=1 to match current legacy credentials
-                val passwordHash = hashPassword(password)
-                UserTable.update({ UserTable.id eq 1 }) {
-                    it[UserTable.username] = username
-                    it[UserTable.passwordHash] = passwordHash
-                    it[UserTable.updatedAt] = now
-                }
-                logger.info { "Updated legacy user (ID=1) to match current credentials: $username" }
-            }
-
-            getUserById(1) ?: throw IllegalStateException("Failed to ensure legacy user")
-        }
 }

@@ -4,9 +4,9 @@ import graphql.schema.DataFetchingEnvironment
 import suwayomi.tachidesk.global.impl.util.Jwt
 import suwayomi.tachidesk.graphql.directives.RequireAuth
 import suwayomi.tachidesk.graphql.server.getAttribute
-import suwayomi.tachidesk.graphql.types.AuthMode
 import suwayomi.tachidesk.server.JavalinSetup.Attribute
 import suwayomi.tachidesk.server.serverConfig
+import suwayomi.tachidesk.server.user.Oidc
 import suwayomi.tachidesk.server.user.User
 import suwayomi.tachidesk.server.user.UserType
 
@@ -31,6 +31,10 @@ class UserMutation {
             throw IllegalArgumentException("Cannot login while already logged-in")
         }
 
+        if (Oidc.getConfig() != null) {
+            throw IllegalArgumentException("OIDC is configured. Use POST /api/v1/oidc/callback to authenticate.")
+        }
+
         // Try multi-user authentication first
         val authenticatedUser = User.authenticateUser(input.username, input.password)
         if (authenticatedUser != null) {
@@ -49,9 +53,7 @@ class UserMutation {
                 input.password == serverConfig.authPassword.value
 
         if (isValid) {
-            // Ensure user ID=1 exists and matches current legacy credentials
-            val legacyUser = User.ensureLegacyUser(input.username, input.password)
-            val jwt = Jwt.generateJwt(legacyUser.id)
+            val jwt = Jwt.generateJwt(1)
             return LoginPayload(
                 clientMutationId = input.clientMutationId,
                 accessToken = jwt.accessToken,

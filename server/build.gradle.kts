@@ -109,6 +109,7 @@ dependencies {
 
     implementation(libs.jwt)
     implementation(libs.bcrypt)
+    implementation(libs.nimbus.oidc)
 
     compileOnly(libs.kte)
 }

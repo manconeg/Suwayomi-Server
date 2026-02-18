@@ -17,6 +17,7 @@ import io.javalin.apibuilder.ApiBuilder.ws
 import suwayomi.tachidesk.global.controller.GlobalMetaController
 import suwayomi.tachidesk.global.controller.SettingsController
 import suwayomi.tachidesk.global.controller.WebViewController
+import suwayomi.tachidesk.server.controller.OidcController
 import suwayomi.tachidesk.server.controller.UserController
 
 object GlobalAPI {
@@ -45,6 +46,10 @@ object GlobalAPI {
         path("users") {
             get("", UserController.getAllUsers)
             post("", UserController.createUser)
+        }
+        path("oidc") {
+            post("configure", OidcController.configure)
+            post("callback", OidcController.callback)
         }
     }
 }
